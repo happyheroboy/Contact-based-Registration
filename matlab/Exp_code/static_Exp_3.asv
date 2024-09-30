@@ -1,0 +1,156 @@
+clc
+close all
+%% load data
+
+% distance 1600 mm
+oc_dd2 = load("C:\Users\Lenovo\Desktop\MJ_re-exp\1600mm_pinpoints.txt");
+row_size = 120;  % 每组的行数
+num_groups = 1200 / row_size;  % 分成的组数
+
+% 使用 mat2cell 分组，每组是 120 行，3 列
+grouped_data = mat2cell(oc_dd2, repmat(row_size, 1, num_groups), 3);
+
+err_all = [];
+% compute error
+for i = 1:5
+    tempD1 = grouped_data{2*i-1};
+    tempD2 = grouped_data{(2*i)};
+    distances = vecnorm(tempD1 - tempD2, 2, 2);
+    temp_err = abs(100-distances);
+    err_all = [err_all temp_err];
+end
+
+err_21 = sort(rmoutliers(err_all(:,1)));
+err_22 = sort(rmoutliers(err_all(:,2)));
+err_23 = sort(rmoutliers(err_all(:,3)));
+err_24 = sort(rmoutliers(err_all(:,4)));
+err_25 = sort(rmoutliers(err_all(:,5)));
+
+err_21 = err_21(1:100,:);
+err_22 = err_22(1:100,:);
+err_23 = err_23(1:100,:);
+err_24 = err_24(1:100,:);
+err_25 = err_25(1:100,:);
+
+%% distance 1800 mm
+oc_dd3 = load("C:\Users\Lenovo\Desktop\MJ_re-exp\1800mm_pinpoints.txt");
+row_size = 120;  % 每组的行数
+num_groups = 1200 / row_size;  % 分成的组数
+
+% 使用 mat2cell 分组，每组是 120 行，3 列
+grouped_data = mat2cell(oc_dd3, repmat(row_size, 1, num_groups), 3);
+
+err_all1 = [];
+% compute error
+for i = 1:5
+    tempD1 = grouped_data{2*i-1};
+    tempD2 = grouped_data{(2*i)};
+    distances = vecnorm(tempD1 - tempD2, 2, 2);
+    temp_err = abs(100-distances);
+    err_all1 = [err_all1 temp_err];
+end
+
+err_31 = sort(rmoutliers(err_all1(:,1)));
+err_32 = sort(rmoutliers(err_all1(:,1)));
+err_33 = rmoutliers(err_33);
+err_34 = rmoutliers(err_34);
+err_35 = rmoutliers(err_35);
+
+err_31 = err_31(1:150,:);
+err_32 = err_32(1:150,:);
+err_33 = err_33(1:150,:);
+err_34 = err_34(1:150,:);
+err_35 = err_35(1:150,:);
+
+
+%%
+x = 1:5;
+% 因变量
+% dataset为5*3的矩阵，一行3个为一组，共5组
+dataset = [mean(err_21),mean(err_31);
+          mean(err_22),mean(err_32);
+          mean(err_23),mean(err_33);
+          mean(err_24),mean(err_34);
+          mean(err_25),mean(err_35)];
+% 误差矩阵
+RMSE = [rms(err_21),rms(err_31);
+rms(err_22),rms(err_32);    
+rms(err_23),rms(err_33);
+rms(err_24),rms(err_34);
+rms(err_25),rms(err_35);
+]; % 下方长度
+STD = [std(err_21),std(err_31);
+std(err_22),std(err_32);    
+std(err_23),std(err_33);
+std(err_24),std(err_34);
+std(err_25),std(err_35);
+];  % 上方长度
+
+%%
+% 绘制初始柱状图
+GO = bar(x,dataset,1,'EdgeColor','k','LineWidth',1.5);
+% 添加误差棒
+[M,N] = size(dataset);
+xpos = zeros(M,N);
+for i = 1:N
+    xpos(:,i) = GO(1,i).XEndPoints'; % v2019b
+end
+hold on;
+hE = errorbar(xpos, dataset, STD, STD);
+
+%%
+C1 = addcolor(92);
+C2 = addcolor(23);
+% C3 = addcolor(42);
+
+%%
+% 柱状图赋色
+GO(1).FaceColor = C1;
+GO(2).FaceColor = C2;
+% GO(3).FaceColor = C3;
+% 误差棒属性
+set(hE, 'LineStyle', 'none', 'Color', 'k','LineWidth', 2)
+
+%%
+
+% 坐标区调整
+set(gca, 'Box', 'on', ...                                        % 边框
+        'XGrid', 'off', 'YGrid', 'off', ...                        % 网格
+        'TickDir', 'in', 'TickLength', [.01 .01], ...            % 刻度
+        'XMinorTick', 'off', 'YMinorTick', 'off', ...             % 小刻度
+        'XColor', [.1 .1 .1],  'YColor',[.1 .1 .1],...            % 坐标轴颜色
+        'YTick', 0:0.1:0.3,...                                      % 刻度位置、间隔
+        'Ylim' , [0 0.22], ...                                     % 坐标轴范围
+        'Xticklabel',{'0%' '20%' '40%' '60%' '80%'},...% X坐标轴刻度标签
+        'Yticklabel',{[0:0.1:1]})                                 % Y坐标轴刻度标签
+
+set(gca,'LineWidth', 2)
+% Legend 设置   
+hLegend = legend([GO(1),GO(2)], ...
+                  '1600 mm', '1800 mm', ...
+                 'Location', 'northwest');
+% Legend位置微调
+P = hLegend.Position;
+hLegend.Position = P;
+% hLegend.Position = P + [0.015 0.03 0 0];
+% 字体和字号
+set(gca, 'FontName', 'Times New Roman')
+xlabel(gca,'Occlusion ratio')
+ylabel(gca,'Error (mm)')
+set(gca, 'FontSize', 16)
+
+set([hXLabel, hYLabel], 'FontName','AvantGarde')
+set(gca, 'FontSize', 20)
+set([hXLabel, hYLabel], 'FontSize', 20)
+set(hTitle, 'FontSize', 11, 'FontWeight' ,'bold')
+
+% 背景颜色
+set(gcf,'Color',[1 1 1])
+
+%% 图片输出
+figW = figureWidth;
+figH = figureHeight;
+set(figureHandle,'PaperUnits',figureUnits);
+set(figureHandle,'PaperPosition',[0 0 figWfigH]);
+fileout = 'test';
+print(figureHandle,[fileout,'.png'],'-r300','-dpng');

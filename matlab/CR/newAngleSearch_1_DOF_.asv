@@ -1,0 +1,162 @@
+
+%%% 一自由度程序
+%绕 中心点和未治疗测髂前上棘组成向量 旋转
+%然后进行角度搜索
+%%%
+clc;
+close all
+%%
+
+%数据导入
+% ***实际点位置****
+
+R_centerPt = [-62.2759900000000, 272.934900000000, 1497.39100000000]; % 实际接触点位置 
+
+R_clouds =  [ 97.1776,	-0.113027,	1760.26;
+92.529,	-2.90196,	1756.85	;
+83.5269,	1.00353,	1762.95;
+96.5994	,-12.0356,	1739.78;
+94.5323,	-8.22006,	1741.64	;
+92.4291,	-14.2811,	1736.38	];  % 实际 采集的6个特征点位置
+
+V_centerPt = [85.6904,-112.2652,-330.0100]; % 虚拟接触点位置
+V_Tr = stlread("left_ACM.stl"); %虚拟 三角面片
+
+%%
+%显示髋臼
+figure();
+patch('Faces',V_Tr.ConnectivityList,'Vertices',V_Tr.Points,'FaceColor','w');
+view(3);
+
+original_points = V_Tr.Points;
+original_faces = V_Tr.ConnectivityList;
+
+%%
+trans_ = V_centerPt - R_centerPt;
+tran_R_clouds = R_clouds + repmat(trans_,6,1);
+
+hold on 
+scatter3(tran_R_clouds(:,1),tran_R_clouds(:,2),tran_R_clouds(:,3),'g');
+scatter3(V_centerPt(:,1),V_centerPt(:,2),V_centerPt(:,3),'r');
+
+%%
+%迭代条件
+
+verified_Rpts = [85.1328,	0.489479,	1782.28
+    93.0828,	-11.8895,	1724.11	
+    91.6755,	-3.95767,	1716.67
+    85.5448,	5.65715,	1710.03	
+]; %相机坐标系下验证点的位置
+
+tra_vpts = verified_Rpts + repmat(trans_,4,1); %(平移到虚拟坐标系下的验证点)
+
+vp_Vpts = [73.5699 	 -82.1831 	-363.0522 		
+69.2325 	-133.0323 	-329.8780 	
+70.4067 	-133.4113 	-321.2538	
+77.8643 	-131.6143 	-308.1436];  %虚拟坐标系下验证点的位置
+
+%%
+%将原点平移至中心点位置
+
+new_Rcloud = tran_R_clouds - repmat(V_centerPt,6,1);
+new_traRcloud = new_Rcloud*R + repmat(V_centerPt,6,1);
+% new_vcenterPt = (V_centerPt - V_centerPt);
+
+hold on 
+scatter3(new_traRcloud(:,1),new_traRcloud(:,2),new_traRcloud(:,3),'blue');
+% scatter3(V_centerPt(:,1),V_centerPt(:,2),V_centerPt(:,3),'r');
+
+%%
+%旋转向量 r-axis
+%未治疗侧髂前上棘位置（相机坐标系下）
+
+noTreatedASIS_R = [284.178, 23.3149, 1675.34];
+trans_noTreatedASIS = ((noTreatedASIS_R + trans_) - V_centerPt)*R + V_centerPt;
+
+%未治疗侧髂前上棘位置（虚拟坐标系下）
+noTreatedASIS_V = [-118.510033, -153.187561, -262.682251];
+
+r_axis = noTreatedASIS_V - V_centerPt;
+r_axis = r_axis/norm(r_axis);
+
+%%
+%重建原点
+
+new_points = V_Tr.Points-repmat(V_centerPt,size(V_Tr.Points,1),1);
+figure();
+patch('Faces',V_Tr.ConnectivityList,'Vertices',new_points,'FaceColor','w');
+view(3);
+
+a_new_traRcloud = new_traRcloud - repmat(V_centerPt,6,1);
+new_vcenterPt = (V_centerPt - V_centerPt);
+
+hold on 
+scatter3(a_new_traRcloud(:,1),a_new_traRcloud(:,2),a_new_traRcloud(:,3),'b',"filled");
+scatter3(new_vcenterPt(:,1),new_vcenterPt(:,2),new_vcenterPt(:,3),'r',"filled");
+plot3([0, 50*r_axis(1)], [0, 50*r_axis(2)], [0, 50*r_axis(3)], 'g-', 'LineWidth', 2);
+
+%%
+
+up_Tr = stlread("upF.stl"); %虚拟 三角面片
+up_Tr_newpts = up_Tr.Points - repmat(V_centerPt,size(up_Tr.Points,1),1);
+
+down_Tr = stlread("downF.stl"); %虚拟 三角面片
+down_Tr_newpts = down_Tr.Points - repmat(V_centerPt,size(down_Tr.Points,1),1);
+
+%%
+[t_err,dis_err] = overlapDistance(a_new_traRcloud,new_points,V_Tr.ConnectivityList);
+%筛选出两块特征点位置的三角面片
+
+initial_diserr = t_err;
+recordR = [];
+
+% 初始化变量以存储最佳解
+best_rotation_angle = 0;
+best_total_distance = inf;
+
+tic;
+for theta = 0:0.1:360
+    
+    disp(theta);
+    temp_R = axisAndangle2RM(theta,r_axis); %构建旋转矩阵
+    temp_cloud = a_new_traRcloud*temp_R; % 旋转后
+
+    [temp_t_err1,temp_dis_err1] = overlapDistance(temp_cloud(1:3,:),down_Tr_newpts,down_Tr.ConnectivityList);
+    %筛选出两块特征点位置的三角面片
+    [temp_t_err2,temp_dis_err2] = overlapDistance(temp_cloud(4:6,:),up_Tr_newpts,up_Tr.ConnectivityList);
+    %筛选出两块特征点位置的三角面片
+
+    temp_t_err = temp_t_err1 + temp_t_err2;
+
+    if temp_t_err<best_total_distance
+        initial_diserr = temp_t_err;
+        recordR = temp_R;
+    end
+end
+toc;
+
+temp_ptCloud = a_new_traRcloud*recordR;
+hold on 
+scatter3(temp_ptCloud(:,1),temp_ptCloud(:,2),temp_ptCloud(:,3),'g',"filled");
+
+
+function RM = axisAndangle2RM(theta,axis1) 
+    
+% axis1 = axis1/norm(axis1);
+% 计算旋转矩阵的元素
+kx = axis1(1);
+ky = axis1(2);
+kz = axis1(3);
+
+K = [  0   -kz   ky ;
+    kz    0  -kx ;
+    -ky   kx    0 ];
+
+RM = eye(3) + sin(theta) * K + (1 - cos(theta)) * K^2;
+
+% 输出旋转矩阵
+% disp('旋转矩阵 R:');
+% disp(RM);
+
+end
+

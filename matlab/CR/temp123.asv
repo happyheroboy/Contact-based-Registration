@@ -1,0 +1,141 @@
+
+vr_data = [
+73.6456 	 -82.0918 	-362.8824 ;		
+69.2325 	-133.0323 	-329.8780 ;	
+71.6644 	-133.1539 	-319.2832 ;
+77.8643 	-131.6143 	-308.1436		
+];
+
+real_d = cal_data3;
+
+
+[R_12,t_12]=CalculateRTMatrix(real_d,vr_data);
+
+new_dd = real_d*R_12 + repmat(t_12,4,1);
+
+Err_ = vr_data - new_dd;
+Err_ = sqrt(Err_(:,1).^2+Err_(:,2).^2+Err_(:,3).^2);
+err_33 = sum(Err_(:));
+rmse_4 = err_22/4;
+
+%% 
+td_1 =[-96.3742900000000	280.970850000000	1422.93900000000
+        144.638300000000	289.237500000000	1432.70850000000];
+
+td_2 = [124.3315 	-155.0043 	-270.4579 	
+-118.7696 	-153.3410 	-262.9614 ];	
+
+new_td1 = td_1*R_12 + repmat(t_12,2,1);
+
+Err_ = td_2 - new_td1;
+Err_ = sqrt(Err_(:,1).^2+Err_(:,2).^2+Err_(:,3).^2);
+
+
+%%
+%ICP
+data_source = downsample(original_points,10);
+data_target = cal_data4*R_12 + repmat(t_12,38,1);
+
+figure;
+scatter3(data_source(:,1),data_source(:,2),data_source(:,3),'b');
+hold on;
+scatter3(data_target(:,1),data_target(:,2),data_target(:,3),'r',"filled");
+hold off;
+
+
+initial_value = eye(4,4);   %旋转矩阵初始值
+iteration = 0;
+rotation = initial_value(1:3,1:3);
+translation = initial_value(1:3,4);
+best_transformationMatrix =[];
+recor_Err = [];
+% data_target = data_target*rotation+ones(size(data_target,1),1)*translation';  %把初值乘进去
+while(iteration<20)
+    
+    iteration = iteration+1;    %迭代次数
+    disp(['迭代次数ieration=',num2str(iteration)]); 
+    
+    %%利用欧式距离找出最近点->对应点集
+    k = size(data_target,1);
+
+    for i = 1:k
+        data_q1 = repmat(data_target(i,:),size(data_source,1),1);
+        temp_val = data_source - data_q1;
+        distance = temp_val(:,1).^2 + temp_val(:,2).^2 + temp_val(:,3).^2;  % 欧氏距离找最近点
+        [min_dis, min_index] = min(distance);   % 找到距离最小的那个点
+
+        data_mid(i,:) = data_source(min_index,:);   % 将那个点保存为对应点
+        error(i) = min_dis;     % 保存距离差值
+    end
+
+    %计算点集均值
+    centroidp = mean(data_target);
+    centroidx = mean(data_mid);
+
+    %去中心化/去质心化
+    p1 = bsxfun(@minus,data_target,centroidp);
+    x1 = bsxfun(@minus,data_mid,centroidx);
+
+    %计算点集协方差
+    H = p1'*x1;
+
+    [u ,~ ,v] = svd(H);
+    Rf = u*v';
+    if det(Rf)<0
+        v = [1,1,-1;1,1,-1;1,1,-1].*v;
+        Rf = u*v';
+    end    
+
+    %计算平移向量
+    Tf = centroidx-centroidp*Rf;
+
+    err = mean(error);
+    T_t = [Rf;Tf];
+
+    initial_value = T_t;  %更新旋转矩阵R 
+    disp('旋转矩阵T=');
+    disp(initial_value);
+    data_target = data_target*Rf + repmat(Tf,size(data_target,1),1);   %更新点集Pts
+    recor_Err = [recor_Err;err];
+end
+
+x1 = data_source(:,1);
+y1 = data_source(:,2);
+z1 = data_source(:,3);
+
+x2 = data_target(:,1);
+y2 = data_target(:,2);
+z2 = data_target(:,3);
+
+figure;
+scatter3(x1,y1,z1,'b');
+hold on;
+scatter3(x2,y2,z2,'r',"filled");
+hold off;
+
+%%
+
+new_bestR = [ 1.0000    0.0002    0.0008
+   -0.0002    1.0000    0.0009
+   -0.0008   -0.0009    1.0000];
+
+new_bestt = [ -0.2797   -0.3120    0.0520];
+
+new_comD = new_td1*new_bestR + repmat(new_bestt,2,1);
+
+% 误差计算
+err_3 = td_2 - new_comD;
+err_3 = sqrt(err_3(:,1).^2+err_3(:,2).^2+err_3(:,3).^2);
+err_13 = sum(err_3(:));
+rmse_3 = err_13/2;
+
+%%
+
+movingDownsampled = pointCloud(data_target);
+fixedDownsampled = pointCloud(data_source);
+
+[tform,movingReg] = pcregistercpd(movingDownsampled,fixedDownsampled);
+
+movingReg 
+
+
