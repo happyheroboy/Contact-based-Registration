@@ -1,3 +1,6 @@
+## Efficient contact-based registration for minimally invasive anterior hip
+arthroplasty
+
 Since we have redone the experiment, we uploaded the data along with the revised manuscript to ensure the authenticity of the findings.
 In addition, we provide matlab code of the visual stable point computation method. 
 Run "CR.m" to see demo examples.
