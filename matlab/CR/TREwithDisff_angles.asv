@@ -1,0 +1,117 @@
+
+
+%
+%接触式配准算法程序
+%
+clc;
+close all
+
+%球头半径
+radius = 21; 
+%note：左右髋臼   外展角和前倾有不一样, 得判别一下
+isLeft = 1;
+%模型导入
+% [original_points,original_faces,newPoints,newFace]=importModel("testPart.stl");
+[original_points,original_faces,newPoints,newFace]=importModel("leftAc_001.stl");
+figure();
+pcshow(pointCloud(original_points));
+%%
+% 导入数据   相机坐标系下三个特征点位置
+r_LLA = cr_points(5,:);
+r_RLA = cr_points(4,:);
+
+TRE_record1 = [];
+TRE_record2 = [];
+
+for i = 1:size(real_pinpts,1)
+    fprintf('The is %2.1f th group\n',i);
+    
+    r_Cp = real_pinpts(i,:);
+    r_end = real_endpts(i,:);
+    
+    V_M = r_end - r_Cp;
+    V_M = V_M/norm(V_M);
+    
+    %模型空间坐标系下特征点位置
+    % v_RLA = [-118.510033, -153.187561, -262.682251];
+    % v_LLA = [123.792313, -155.112869, -270.958984];
+    
+    v_RLA = [-118.1970 	-152.0204 	-265.6172];
+    v_LLA = [120.8548 	-153.8728 	-274.9739];
+    %%
+    %rotate the model   使髋臼窝朝上
+    %角度：外展角和前倾角
+    angle_alpha = deg2rad(0); %前倾角
+    angle_gammar = deg2rad(30);  
+    
+    Z_axis = angle2vector(angle_alpha,angle_gammar,isLeft);
+    num_ite = 1 ;
+    record_err1 = [];
+    record_err2 = [];
+    start_z = [];
+    KPL = [];
+    RSME = [];
+    while num_ite<=10
+        
+        R_XYZ = buildCoordinate(angle_gammar,Z_axis);
+        start_z = [start_z;Z_axis];
+    
+        loc = round(original_points*R_XYZ,4);
+        %显示旋转后的髋臼
+        figure();
+        pcshow(pointCloud(loc));
+        % patch('Faces',original_faces,'Vertices',loc,'FaceColor','w');
+        view(3);
+        
+        %%
+        %求最低落点
+        [trans_keyPoint,trans_keyPoint_contact] = findLowestBPt(loc,R_XYZ,radius);
+        v_Cp = trans_keyPoint(1,:);
+        KPL = [KPL;v_Cp];
+        
+        %求旋转、平移
+        data_r = [r_LLA',r_RLA',r_Cp',r_end'];  % real
+        data_v = [v_LLA',v_RLA',v_Cp'];  % virtual
+        
+        %%
+        [R,t,err1,err2] = computerTransformation(data_r,data_v);
+        % 更新入射向量
+        % v_Cp = trans_keyPoint;
+        num_ite = num_ite + 1;
+        Z_axis = V_M*R;
+        record_err1 = [record_err1;err1];
+        record_err2 = [record_err2;err2];
+        
+        trans_dataR = R*data_r(:,1:3);
+        t_r2v_11 = trans_dataR(:,3)- data_v(:,3);
+        final_r = trans_dataR - repmat(t_r2v_11,1,3);
+        
+        err = final_r - data_v;
+        err = err .* err;
+        err = sum(err(:));
+        rmse1 = sqrt(err/3);
+        
+        RSME = [RSME;rmse1];
+    end
+    
+    figure
+    scatter3(final_r(1,:),final_r(2,:),final_r(3,:),'b');
+    hold on
+    scatter3(data_v(1,:),data_v(2,:),data_v(3,:),'r');
+    
+    %% 计算误差
+    
+    tran_Pts = (R*real_test_values'-repmat(t_r2v_11,1,size(real_test_values,1)))';
+    
+    % 误差计算
+    err_1 = tran_Pts - virtual_teset_values;
+    err_1 = sqrt(err_1(:,1).^2+err_1(:,2).^2+err_1(:,3).^2);
+    err_12 = sum(err_1.^2);
+    TRE_2 = sqrt(err_12/13);
+    
+    sum_d1 = sum(err_1(1:12,:).^2);
+    TRE_3= sqrt(sum_d1/12); 
+    
+    TRE_record1 = [TRE_record1;TRE_2];
+    TRE_record2 = [TRE_record2;TRE_3];
+end
